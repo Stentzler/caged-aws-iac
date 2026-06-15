@@ -58,6 +58,7 @@ resource "aws_lambda_function" "this" {
 
   filename         = data.archive_file.bootstrap.output_path
   source_code_hash = data.archive_file.bootstrap.output_base64sha256
+  publish          = true
 
   ephemeral_storage {
     size = var.ephemeral_storage_size
@@ -81,4 +82,19 @@ resource "aws_lambda_function" "this" {
   ]
 
   tags = var.tags
+}
+
+resource "aws_lambda_alias" "this" {
+  name             = var.alias_name
+  description      = "${var.alias_name} environment release"
+  function_name    = aws_lambda_function.this.function_name
+  function_version = aws_lambda_function.this.version
+
+  # CI publishes application versions and promotes the alias after bootstrap.
+  lifecycle {
+    ignore_changes = [
+      function_version,
+      routing_config,
+    ]
+  }
 }

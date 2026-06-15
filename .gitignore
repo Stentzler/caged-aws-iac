@@ -48,8 +48,10 @@ package/
 *.tfstate
 *.tfstate.*
 *.tfplan
+tfplan
 crash.log
 crash.*.log
 
 # Keep dependency lock files versioned
 !**/.terraform.lock.hcl
+

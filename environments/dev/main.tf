@@ -7,12 +7,12 @@ terraform {
   # and a version constraint.
   required_providers {
     archive = {
-      source = "hashicorp/archive"
+      source  = "hashicorp/archive"
       version = "~> 2.7"
     }
 
     aws = {
-      source = "hashicorp/aws"
+      source  = "hashicorp/aws"
       version = "~> 6.0"
     }
   }
@@ -45,8 +45,8 @@ locals {
 
   tags = {
     Environment = var.environment
-    ManagedBy = "Terraform"
-    Project   = var.project_name
+    ManagedBy   = "Terraform"
+    Project     = var.project_name
   }
 }
 
@@ -54,7 +54,7 @@ locals {
 # `storage` is local to this environment and lets us reference module outputs
 # using expressions such as `module.storage.bucket_name`.
 module "storage" {
-  source = "../../modules/storage"
+  source      = "../../modules/storage"
   bucket_name = "${local.name_prefix}-downloaded-files-${data.aws_caller_identity.current.account_id}"
 
   # `force_destroy=false` prevents Terraform from deleting a non-empty bucket.
@@ -79,9 +79,9 @@ module "registry" {
 data "aws_iam_policy_document" "check_availability" {
   statement {
     # `sid` is an optional human-readable identifier for this statement.
-    sid = "ReadRegistry"
-    effect = "Allow"
-    actions = ["dynamodb:GetItem"]
+    sid       = "ReadRegistry"
+    effect    = "Allow"
+    actions   = ["dynamodb:GetItem"]
     resources = [module.registry.table_arn]
   }
 }
@@ -90,6 +90,7 @@ module "check_availability_lambda" {
   source = "../../modules/lambda_function"
 
   function_name = "${local.name_prefix}-check-availability"
+  alias_name    = var.environment
   description   = "Find Novo CAGED FTP files that are not in the download registry."
 
   # Lambda memory is measured in MB. AWS also allocates CPU proportionally to
@@ -117,7 +118,7 @@ module "check_availability_lambda" {
     # These variables configure AWS Lambda Powertools logging behavior.
     POWERTOOLS_SERVICE_NAME = "check-availability"
     POWERTOOLS_LOG_LEVEL    = "INFO"
-    POWERTOOLS_LOG_EVENT = "false"
+    POWERTOOLS_LOG_EVENT    = "false"
   }
 
   iam_policy_json = data.aws_iam_policy_document.check_availability.json
@@ -156,10 +157,11 @@ data "aws_iam_policy_document" "download" {
 module "download_lambda" {
   source = "../../modules/lambda_function"
 
-  function_name = "${local.name_prefix}-download"
-  description   = "Download one Novo CAGED FTP archive and upload it to S3."
-  memory_size = 512
-  timeout     = 900
+  function_name          = "${local.name_prefix}-download"
+  alias_name             = var.environment
+  description            = "Download one Novo CAGED FTP archive and upload it to S3."
+  memory_size            = 512
+  timeout                = 900
   ephemeral_storage_size = 2048
 
   environment_variables = {
@@ -190,8 +192,8 @@ module "download_workflow" {
 
   # Passing Lambda ARNs gives the workflow module exact invocation targets and
   # lets it build a least-privilege Step Functions execution policy.
-  check_availability_lambda_arn = module.check_availability_lambda.function_arn
-  download_lambda_arn           = module.download_lambda.function_arn
+  check_availability_lambda_arn = module.check_availability_lambda.alias_arn
+  download_lambda_arn           = module.download_lambda.alias_arn
 
   # These inputs control whether and when EventBridge Scheduler starts the
   # workflow. The schedule is initially disabled during bootstrap.
@@ -223,9 +225,19 @@ output "check_availability_function_name" {
   value       = module.check_availability_lambda.function_name
 }
 
+output "check_availability_alias_arn" {
+  description = "Qualified ARN used to invoke the availability Lambda."
+  value       = module.check_availability_lambda.alias_arn
+}
+
 output "download_function_name" {
   description = "Download Lambda name used by its deployment workflow."
   value       = module.download_lambda.function_name
+}
+
+output "download_alias_arn" {
+  description = "Qualified ARN used to invoke the download Lambda."
+  value       = module.download_lambda.alias_arn
 }
 
 output "state_machine_arn" {

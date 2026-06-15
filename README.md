@@ -4,9 +4,33 @@ Terraform infrastructure layout for AWS environments and reusable modules.
 
 ## Structure
 
+- `environments/shared`: Account-wide GitHub OIDC provider and Lambda deployment roles.
 - `environments/dev`: Terraform configuration for the development environment.
 - `environments/prod`: Terraform configuration for the production environment.
 - `modules`: Reusable Terraform modules for AWS resources.
+
+## Shared deployment identity
+
+The shared stack creates the GitHub Actions OIDC provider once for the AWS
+account and narrowly scoped deployment roles for both Lambda repositories in
+development and production. Apply it before configuring GitHub Actions:
+
+```bash
+terraform -chdir=environments/shared init
+terraform -chdir=environments/shared plan -out=tfplan
+terraform -chdir=environments/shared apply tfplan
+terraform -chdir=environments/shared output deploy_role_arns
+```
+
+Configure the appropriate role ARN as `AWS_DEPLOY_ROLE_ARN` in each Lambda
+repository. Use GitHub Environment secrets named `dev` and `prod` when both
+environments are enabled, because each environment assumes a different role.
+Restrict the `dev` GitHub Environment to `develop` and the `prod` environment
+to `main`, with required reviewers for production if appropriate.
+
+Each AWS trust policy accepts only its exact repository and GitHub Environment.
+Each role can update code, publish versions, and promote aliases only for its
+corresponding Lambda function.
 
 ## Development architecture
 
@@ -19,8 +43,9 @@ The development stack creates:
   downloads each new file.
 - An EventBridge Scheduler schedule for 06:00 `America/Sao_Paulo` each day.
 
-The schedule is disabled by default. Terraform owns Lambda configuration and
-permissions; the Lambda repositories' CI workflows own function code updates.
+The schedule is disabled by default. Terraform owns Lambda configuration,
+permissions, and environment aliases. The Lambda repositories' CI workflows
+own function code updates, publish immutable versions, and promote the aliases.
 
 ## Bootstrap development
 

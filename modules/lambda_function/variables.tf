@@ -3,6 +3,11 @@ variable "function_name" {
   type        = string
 }
 
+variable "alias_name" {
+  description = "Environment alias created for the Lambda function."
+  type        = string
+}
+
 variable "description" {
   description = "Description of the Lambda function."
   type        = string
