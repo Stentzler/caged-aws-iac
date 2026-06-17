@@ -12,8 +12,9 @@ Terraform infrastructure layout for AWS environments and reusable modules.
 ## Shared deployment identity
 
 The shared stack creates the GitHub Actions OIDC provider once for the AWS
-account and narrowly scoped deployment roles for both Lambda repositories in
-development and production. Apply it before configuring GitHub Actions:
+account and narrowly scoped deployment roles for the Lambda repositories and
+the ECS processing-task repository in development and production. Apply it
+before configuring GitHub Actions:
 
 ```bash
 terraform -chdir=environments/shared init
@@ -29,8 +30,11 @@ Restrict the `dev` GitHub Environment to `develop` and the `prod` environment
 to `main`, with required reviewers for production if appropriate.
 
 Each AWS trust policy accepts only its exact repository and GitHub Environment.
-Each role can update code, publish versions, and promote aliases only for its
-corresponding Lambda function.
+Each Lambda deployment role can update code, publish versions, and promote
+aliases only for its corresponding Lambda function. Each ECS deployment role
+can push images to its ECR repository, register task-definition revisions, and
+pass only the processing task's execution and application roles. It cannot run
+the processing task; Step Functions owns runtime invocation.
 
 ## Development architecture
 
@@ -38,6 +42,11 @@ The development stack creates:
 
 - A private, encrypted, versioned S3 bucket for downloaded CAGED archives.
 - DynamoDB table `downloaded_files_registry` with `registry_id` as its key.
+- DynamoDB table `caged_processes` keyed by `reference_month` and `process_id`.
+- ECR repository `caged-dev-processing-task` for the processing container image.
+- ECS cluster and Fargate task definition for `caged-dev-processing-task`.
+- Step Functions permission to run the latest processing task revision after
+  downloads complete.
 - `caged-dev-check-availability` and `caged-dev-download` Lambda functions.
 - A Standard Step Functions workflow that checks availability and sequentially
   downloads each new file.

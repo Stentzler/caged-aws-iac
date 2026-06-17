@@ -38,6 +38,17 @@ provider "aws" {
 # Its values are referenced as `data.aws_caller_identity.current.<attribute>`.
 data "aws_caller_identity" "current" {}
 
+data "aws_vpc" "default" {
+  default = true
+}
+
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+}
+
 # `locals` defines reusable values calculated inside this Terraform module.
 # Unlike input variables, callers cannot directly supply local values.
 locals {
@@ -65,6 +76,32 @@ module "storage" {
   tags = local.tags
 }
 
+resource "aws_ecr_repository" "processing_task" {
+  name                 = "${local.name_prefix}-processing-task"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = local.tags
+}
+
+resource "aws_security_group" "processing_task" {
+  name        = "${local.name_prefix}-processing-task"
+  description = "Network access for the CAGED processing Fargate task."
+  vpc_id      = data.aws_vpc.default.id
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = local.tags
+}
+
 # Instantiate the reusable DynamoDB registry module.
 module "registry" {
   source = "../../modules/registry"
@@ -72,6 +109,61 @@ module "registry" {
   # The module creates a table with this name and a `registry_id` partition key.
   table_name = var.registry_table_name
   tags       = local.tags
+}
+
+module "process_audit_table" {
+  source = "../../modules/process_audit_table"
+
+  table_name = var.process_audit_table_name
+  tags       = local.tags
+}
+
+data "aws_iam_policy_document" "processing_task" {
+  statement {
+    sid    = "ReadAndUpdateDownloadedRegistry"
+    effect = "Allow"
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:UpdateItem",
+    ]
+    resources = [module.registry.table_arn]
+  }
+
+  statement {
+    sid       = "WriteProcessAudit"
+    effect    = "Allow"
+    actions   = ["dynamodb:PutItem"]
+    resources = [module.process_audit_table.table_arn]
+  }
+
+  statement {
+    sid       = "ReadDownloadedArchives"
+    effect    = "Allow"
+    actions   = ["s3:GetObject"]
+    resources = ["${module.storage.bucket_arn}/raw/caged/*"]
+  }
+}
+
+module "processing_task" {
+  source = "../../modules/ecs_fargate_task"
+
+  name                   = "${local.name_prefix}-processing-task"
+  cluster_name           = "${local.name_prefix}-processing"
+  container_name         = "processing-task"
+  image_uri              = "${aws_ecr_repository.processing_task.repository_url}:${var.processing_task_image_tag}"
+  cpu                    = var.processing_task_cpu
+  memory                 = var.processing_task_memory
+  ephemeral_storage_size = var.processing_task_ephemeral_storage_size
+  log_retention_days     = var.log_retention_days
+  task_role_policy_json  = data.aws_iam_policy_document.processing_task.json
+  environment_variables = {
+    AWS_REGION               = var.aws_region
+    REGISTRY_TABLE_NAME      = module.registry.table_name
+    REGISTRY_ID              = var.registry_id
+    PROCESS_AUDIT_TABLE_NAME = module.process_audit_table.table_name
+    LOG_LEVEL                = "INFO"
+  }
+  tags = local.tags
 }
 
 # `aws_iam_policy_document` is another data source. It builds and validates an
@@ -195,6 +287,15 @@ module "download_workflow" {
   check_availability_lambda_arn = module.check_availability_lambda.alias_arn
   download_lambda_arn           = module.download_lambda.alias_arn
 
+  processing_task_cluster_arn        = module.processing_task.cluster_arn
+  processing_task_definition_family  = module.processing_task.task_definition_family
+  processing_task_container_name     = "processing-task"
+  processing_task_execution_role_arn = module.processing_task.execution_role_arn
+  processing_task_role_arn           = module.processing_task.task_role_arn
+  processing_task_subnet_ids         = data.aws_subnets.default.ids
+  processing_task_security_group_ids = [aws_security_group.processing_task.id]
+  processing_task_assign_public_ip   = true
+
   # These inputs control whether and when EventBridge Scheduler starts the
   # workflow. The schedule is initially disabled during bootstrap.
   schedule_enabled    = var.schedule_enabled
@@ -218,6 +319,36 @@ output "download_bucket_name" {
 output "registry_table_name" {
   description = "DynamoDB downloaded-file registry table."
   value       = module.registry.table_name
+}
+
+output "process_audit_table_name" {
+  description = "DynamoDB audit table for CAGED processing file records."
+  value       = module.process_audit_table.table_name
+}
+
+output "processing_task_repository_url" {
+  description = "ECR repository URL for the processing ECS task image."
+  value       = aws_ecr_repository.processing_task.repository_url
+}
+
+output "processing_task_cluster_name" {
+  description = "Name of the ECS cluster that runs the processing task."
+  value       = module.processing_task.cluster_name
+}
+
+output "processing_task_definition_arn" {
+  description = "ARN of the processing ECS task definition."
+  value       = module.processing_task.task_definition_arn
+}
+
+output "processing_task_execution_role_arn" {
+  description = "ARN of the processing ECS task execution role."
+  value       = module.processing_task.execution_role_arn
+}
+
+output "processing_task_role_arn" {
+  description = "ARN of the processing ECS task application role."
+  value       = module.processing_task.task_role_arn
 }
 
 output "check_availability_function_name" {

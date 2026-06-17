@@ -28,6 +28,36 @@ variable "registry_id" {
   default     = "ftp_tree"
 }
 
+variable "process_audit_table_name" {
+  description = "Name of the CAGED file processing audit table."
+  type        = string
+  default     = "caged_processes"
+}
+
+variable "processing_task_cpu" {
+  description = "CPU units reserved for the processing ECS task."
+  type        = number
+  default     = 1024
+}
+
+variable "processing_task_memory" {
+  description = "Memory in MiB reserved for the processing ECS task."
+  type        = number
+  default     = 2048
+}
+
+variable "processing_task_ephemeral_storage_size" {
+  description = "Ephemeral storage in GiB for the processing ECS task."
+  type        = number
+  default     = 50
+}
+
+variable "processing_task_image_tag" {
+  description = "Container image tag deployed to the processing task definition."
+  type        = string
+  default     = "bootstrap"
+}
+
 variable "schedule_enabled" {
   description = "Enable the daily Step Functions schedule after bootstrap is complete."
   type        = bool

@@ -10,6 +10,10 @@ data "aws_iam_policy_document" "state_machine_assume_role" {
   }
 }
 
+data "aws_caller_identity" "current" {}
+
+data "aws_region" "current" {}
+
 data "aws_iam_policy_document" "state_machine" {
   statement {
     effect = "Allow"
@@ -35,6 +39,56 @@ data "aws_iam_policy_document" "state_machine" {
       "logs:DescribeLogGroups",
     ]
     resources = ["*"]
+  }
+
+  statement {
+    effect  = "Allow"
+    actions = ["ecs:RunTask"]
+    resources = [
+      "arn:aws:ecs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:task-definition/${var.processing_task_definition_family}:*",
+    ]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "ecs:cluster"
+      values   = [var.processing_task_cluster_arn]
+    }
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "ecs:DescribeTasks",
+      "ecs:StopTask",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "events:DescribeRule",
+      "events:PutRule",
+      "events:PutTargets",
+    ]
+    resources = [
+      "arn:aws:events:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:rule/StepFunctionsGetEventsForECSTaskRule",
+    ]
+  }
+
+  statement {
+    effect  = "Allow"
+    actions = ["iam:PassRole"]
+    resources = [
+      var.processing_task_execution_role_arn,
+      var.processing_task_role_arn,
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["ecs-tasks.amazonaws.com"]
+    }
   }
 }
 
@@ -205,7 +259,34 @@ resource "aws_sfn_state_machine" "this" {
           # collected Map results into the workflow's final `files` property.
           "files.$" = "$.files"
         }
-        End = true
+        Next = "RunProcessingTask"
+      }
+      RunProcessingTask = {
+        Type     = "Task"
+        Resource = "arn:aws:states:::ecs:runTask.sync"
+        Parameters = {
+          LaunchType     = "FARGATE"
+          Cluster        = var.processing_task_cluster_arn
+          TaskDefinition = var.processing_task_definition_family
+          NetworkConfiguration = {
+            AwsvpcConfiguration = {
+              Subnets        = var.processing_task_subnet_ids
+              SecurityGroups = var.processing_task_security_group_ids
+              AssignPublicIp = var.processing_task_assign_public_ip ? "ENABLED" : "DISABLED"
+            }
+          }
+          Overrides = {
+            ContainerOverrides = [{
+              Name = var.processing_task_container_name
+              Environment = [{
+                Name      = "PROCESSING_JOB_JSON"
+                "Value.$" = "States.JsonToString($)"
+              }]
+            }]
+          }
+        }
+        ResultPath = "$.processing_task"
+        End        = true
       }
     }
   })
