@@ -34,6 +34,24 @@ variable "process_audit_table_name" {
   default     = "caged_processes"
 }
 
+variable "geo_job_metrics_table_name" {
+  description = "Name of the CAGED geo/job metrics table."
+  type        = string
+  default     = "caged_geo_job_metrics"
+}
+
+variable "cbo_lookup_table_name" {
+  description = "Name of the CAGED CBO lookup table."
+  type        = string
+  default     = "caged_cbo_lookup"
+}
+
+variable "geo_lookup_table_name" {
+  description = "Name of the CAGED geo lookup table."
+  type        = string
+  default     = "caged_geo_lookup"
+}
+
 variable "processing_task_cpu" {
   description = "CPU units reserved for the processing ECS task."
   type        = number

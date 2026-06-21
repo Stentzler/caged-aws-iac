@@ -38,6 +38,8 @@ provider "aws" {
 # Its values are referenced as `data.aws_caller_identity.current.<attribute>`.
 data "aws_caller_identity" "current" {}
 
+data "aws_partition" "current" {}
+
 data "aws_vpc" "default" {
   default = true
 }
@@ -118,6 +120,13 @@ module "process_audit_table" {
   tags       = local.tags
 }
 
+module "geo_job_metrics_table" {
+  source = "../../modules/geo_job_metrics_table"
+
+  table_name = var.geo_job_metrics_table_name
+  tags       = local.tags
+}
+
 data "aws_iam_policy_document" "processing_task" {
   statement {
     sid    = "ReadAndUpdateDownloadedRegistry"
@@ -134,6 +143,23 @@ data "aws_iam_policy_document" "processing_task" {
     effect    = "Allow"
     actions   = ["dynamodb:PutItem"]
     resources = [module.process_audit_table.table_arn]
+  }
+
+  statement {
+    sid       = "WriteGeoJobMetrics"
+    effect    = "Allow"
+    actions   = ["dynamodb:BatchWriteItem", "dynamodb:PutItem"]
+    resources = [module.geo_job_metrics_table.table_arn]
+  }
+
+  statement {
+    sid     = "ReadCagedLookups"
+    effect  = "Allow"
+    actions = ["dynamodb:GetItem"]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.cbo_lookup_table_name}",
+      "arn:${data.aws_partition.current.partition}:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.geo_lookup_table_name}",
+    ]
   }
 
   statement {
@@ -157,11 +183,14 @@ module "processing_task" {
   log_retention_days     = var.log_retention_days
   task_role_policy_json  = data.aws_iam_policy_document.processing_task.json
   environment_variables = {
-    AWS_REGION               = var.aws_region
-    REGISTRY_TABLE_NAME      = module.registry.table_name
-    REGISTRY_ID              = var.registry_id
-    PROCESS_AUDIT_TABLE_NAME = module.process_audit_table.table_name
-    LOG_LEVEL                = "INFO"
+    AWS_REGION                 = var.aws_region
+    REGISTRY_TABLE_NAME        = module.registry.table_name
+    REGISTRY_ID                = var.registry_id
+    PROCESS_AUDIT_TABLE_NAME   = module.process_audit_table.table_name
+    GEO_JOB_METRICS_TABLE_NAME = module.geo_job_metrics_table.table_name
+    CBO_LOOKUP_TABLE_NAME      = var.cbo_lookup_table_name
+    GEO_LOOKUP_TABLE_NAME      = var.geo_lookup_table_name
+    LOG_LEVEL                  = "INFO"
   }
   tags = local.tags
 }
