@@ -57,6 +57,7 @@ data "aws_iam_policy_document" "deploy" {
     actions = [
       "ecs:DescribeTaskDefinition",
       "ecs:RegisterTaskDefinition",
+      "ecs:TagResource",
     ]
     resources = ["*"]
   }
