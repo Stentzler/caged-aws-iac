@@ -40,6 +40,12 @@ variable "geo_job_metrics_table_name" {
   default     = "caged_geo_job_metrics"
 }
 
+variable "metric_batches_table_name" {
+  description = "Name of the CAGED metric batches table."
+  type        = string
+  default     = "caged_metric_batches"
+}
+
 variable "metric_revisions_table_name" {
   description = "Name of the CAGED metric revisions table."
   type        = string

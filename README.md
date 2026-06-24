@@ -44,6 +44,7 @@ The development stack creates:
 - DynamoDB table `downloaded_files_registry` with `registry_id` as its key.
 - DynamoDB table `caged_processes` keyed by `reference_month` and `process_id`.
 - DynamoDB table `caged_geo_job_metrics` for city/state profession metrics.
+- DynamoDB table `caged_metric_batches` for idempotent current-month batches.
 - DynamoDB table `caged_metric_revisions` for idempotent historical corrections.
 - ECR repository `caged-dev-processing-task` for the processing container image.
 - ECS cluster and Fargate task definition for `caged-dev-processing-task`.

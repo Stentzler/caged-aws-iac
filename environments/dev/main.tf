@@ -127,6 +127,13 @@ module "geo_job_metrics_table" {
   tags       = local.tags
 }
 
+module "metric_batches_table" {
+  source = "../../modules/metric_batches_table"
+
+  table_name = var.metric_batches_table_name
+  tags       = local.tags
+}
+
 module "metric_revisions_table" {
   source = "../../modules/metric_revisions_table"
 
@@ -156,11 +163,22 @@ data "aws_iam_policy_document" "processing_task" {
     sid    = "ReadAndWriteGeoJobMetrics"
     effect = "Allow"
     actions = [
-      "dynamodb:BatchWriteItem",
       "dynamodb:GetItem",
       "dynamodb:PutItem",
+      "dynamodb:TransactWriteItems",
     ]
     resources = [module.geo_job_metrics_table.table_arn]
+  }
+
+  statement {
+    sid    = "WriteAndApplyMetricBatches"
+    effect = "Allow"
+    actions = [
+      "dynamodb:PutItem",
+      "dynamodb:Query",
+      "dynamodb:TransactWriteItems",
+    ]
+    resources = [module.metric_batches_table.table_arn]
   }
 
   statement {
@@ -169,7 +187,7 @@ data "aws_iam_policy_document" "processing_task" {
     actions = [
       "dynamodb:PutItem",
       "dynamodb:Query",
-      "dynamodb:UpdateItem",
+      "dynamodb:TransactWriteItems",
     ]
     resources = [module.metric_revisions_table.table_arn]
   }
@@ -210,6 +228,7 @@ module "processing_task" {
     REGISTRY_ID                 = var.registry_id
     PROCESS_AUDIT_TABLE_NAME    = module.process_audit_table.table_name
     GEO_JOB_METRICS_TABLE_NAME  = module.geo_job_metrics_table.table_name
+    METRIC_BATCHES_TABLE_NAME   = module.metric_batches_table.table_name
     METRIC_REVISIONS_TABLE_NAME = module.metric_revisions_table.table_name
     CBO_LOOKUP_TABLE_NAME       = var.cbo_lookup_table_name
     GEO_LOOKUP_TABLE_NAME       = var.geo_lookup_table_name
@@ -381,6 +400,11 @@ output "process_audit_table_name" {
 output "geo_job_metrics_table_name" {
   description = "DynamoDB table containing CAGED geo/job metrics."
   value       = module.geo_job_metrics_table.table_name
+}
+
+output "metric_batches_table_name" {
+  description = "DynamoDB table containing idempotent metric batch records."
+  value       = module.metric_batches_table.table_name
 }
 
 output "metric_revisions_table_name" {
