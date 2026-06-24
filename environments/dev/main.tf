@@ -163,6 +163,7 @@ data "aws_iam_policy_document" "processing_task" {
     sid    = "ReadAndWriteGeoJobMetrics"
     effect = "Allow"
     actions = [
+      "dynamodb:BatchGetItem",
       "dynamodb:GetItem",
       "dynamodb:PutItem",
       "dynamodb:TransactWriteItems",
