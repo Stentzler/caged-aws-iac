@@ -141,6 +141,23 @@ module "metric_revisions_table" {
   tags       = local.tags
 }
 
+module "cbo_lookup_table" {
+  source = "../../modules/lookup_table"
+
+  table_name    = var.cbo_lookup_table_name
+  partition_key = "code"
+  tags          = local.tags
+}
+
+module "geo_lookup_table" {
+  source = "../../modules/lookup_table"
+
+  table_name    = var.geo_lookup_table_name
+  partition_key = "code"
+  sort_key      = "type"
+  tags          = local.tags
+}
+
 data "aws_iam_policy_document" "processing_task" {
   statement {
     sid    = "ReadAndUpdateDownloadedRegistry"
@@ -198,8 +215,8 @@ data "aws_iam_policy_document" "processing_task" {
     effect  = "Allow"
     actions = ["dynamodb:GetItem"]
     resources = [
-      "arn:${data.aws_partition.current.partition}:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.cbo_lookup_table_name}",
-      "arn:${data.aws_partition.current.partition}:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.geo_lookup_table_name}",
+      module.cbo_lookup_table.table_arn,
+      module.geo_lookup_table.table_arn,
     ]
   }
 
@@ -231,8 +248,8 @@ module "processing_task" {
     GEO_JOB_METRICS_TABLE_NAME  = module.geo_job_metrics_table.table_name
     METRIC_BATCHES_TABLE_NAME   = module.metric_batches_table.table_name
     METRIC_REVISIONS_TABLE_NAME = module.metric_revisions_table.table_name
-    CBO_LOOKUP_TABLE_NAME       = var.cbo_lookup_table_name
-    GEO_LOOKUP_TABLE_NAME       = var.geo_lookup_table_name
+    CBO_LOOKUP_TABLE_NAME       = module.cbo_lookup_table.table_name
+    GEO_LOOKUP_TABLE_NAME       = module.geo_lookup_table.table_name
     LOG_LEVEL                   = "INFO"
   }
   tags = local.tags
@@ -411,6 +428,16 @@ output "metric_batches_table_name" {
 output "metric_revisions_table_name" {
   description = "DynamoDB table containing idempotent metric revision records."
   value       = module.metric_revisions_table.table_name
+}
+
+output "cbo_lookup_table_name" {
+  description = "DynamoDB table containing CBO lookup records."
+  value       = module.cbo_lookup_table.table_name
+}
+
+output "geo_lookup_table_name" {
+  description = "DynamoDB table containing geographic lookup records."
+  value       = module.geo_lookup_table.table_name
 }
 
 output "processing_task_repository_url" {
