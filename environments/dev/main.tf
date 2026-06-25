@@ -149,6 +149,14 @@ module "cbo_lookup_table" {
   tags          = local.tags
 }
 
+module "cnae_lookup_table" {
+  source = "../../modules/lookup_table"
+
+  table_name    = var.cnae_lookup_table_name
+  partition_key = "code"
+  tags          = local.tags
+}
+
 module "geo_lookup_table" {
   source = "../../modules/lookup_table"
 
@@ -195,6 +203,7 @@ data "aws_iam_policy_document" "processing_task" {
       "dynamodb:PutItem",
       "dynamodb:Query",
       "dynamodb:TransactWriteItems",
+      "dynamodb:UpdateItem",
     ]
     resources = [module.metric_batches_table.table_arn]
   }
@@ -206,6 +215,7 @@ data "aws_iam_policy_document" "processing_task" {
       "dynamodb:PutItem",
       "dynamodb:Query",
       "dynamodb:TransactWriteItems",
+      "dynamodb:UpdateItem",
     ]
     resources = [module.metric_revisions_table.table_arn]
   }
@@ -433,6 +443,11 @@ output "metric_revisions_table_name" {
 output "cbo_lookup_table_name" {
   description = "DynamoDB table containing CBO lookup records."
   value       = module.cbo_lookup_table.table_name
+}
+
+output "cnae_lookup_table_name" {
+  description = "DynamoDB table containing CNAE lookup records."
+  value       = module.cnae_lookup_table.table_name
 }
 
 output "geo_lookup_table_name" {

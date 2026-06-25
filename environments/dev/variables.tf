@@ -58,6 +58,12 @@ variable "cbo_lookup_table_name" {
   default     = "caged_cbo_lookup"
 }
 
+variable "cnae_lookup_table_name" {
+  description = "Name of the CAGED CNAE lookup table."
+  type        = string
+  default     = "caged_cnae_lookup"
+}
+
 variable "geo_lookup_table_name" {
   description = "Name of the CAGED geo lookup table."
   type        = string
