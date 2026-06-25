@@ -73,19 +73,19 @@ variable "geo_lookup_table_name" {
 variable "processing_task_cpu" {
   description = "CPU units reserved for the processing ECS task."
   type        = number
-  default     = 1024
+  default     = 512
 }
 
 variable "processing_task_memory" {
   description = "Memory in MiB reserved for the processing ECS task."
   type        = number
-  default     = 2048
+  default     = 1024
 }
 
 variable "processing_task_ephemeral_storage_size" {
   description = "Ephemeral storage in GiB for the processing ECS task."
   type        = number
-  default     = 50
+  default     = 21
 }
 
 variable "processing_task_image_tag" {
