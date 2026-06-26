@@ -127,6 +127,13 @@ module "geo_job_metrics_table" {
   tags       = local.tags
 }
 
+module "dataset_catalog_table" {
+  source = "../../modules/dataset_catalog_table"
+
+  table_name = var.dataset_catalog_table_name
+  tags       = local.tags
+}
+
 module "metric_batches_table" {
   source = "../../modules/metric_batches_table"
 
@@ -373,6 +380,53 @@ module "download_lambda" {
   tags               = local.tags
 }
 
+data "aws_iam_policy_document" "query_metrics" {
+  statement {
+    sid    = "ReadGeoJobMetrics"
+    effect = "Allow"
+    actions = [
+      "dynamodb:BatchGetItem",
+      "dynamodb:GetItem",
+    ]
+    resources = [module.geo_job_metrics_table.table_arn]
+  }
+
+  statement {
+    sid       = "ReadDatasetCatalog"
+    effect    = "Allow"
+    actions   = ["dynamodb:GetItem"]
+    resources = [module.dataset_catalog_table.table_arn]
+  }
+}
+
+module "query_lambda" {
+  source = "../../modules/lambda_function"
+
+  function_name = "${local.name_prefix}-query"
+  alias_name    = var.environment
+  description   = "Query CAGED geo/job metrics for the web application."
+  memory_size   = 256
+  timeout       = 30
+
+  environment_variables = {
+    ENVIRONMENT                = var.environment
+    SOURCE_NAME                = "caged-query"
+    METRICS_TABLE_NAME         = module.geo_job_metrics_table.table_name
+    DATASET_CATALOG_TABLE_NAME = module.dataset_catalog_table.table_name
+    DATASET_ID                 = "CAGED_GEO_JOB_METRICS"
+    CORS_ALLOWED_ORIGIN        = "*"
+    MAX_QUERY_MONTHS           = "24"
+    BATCH_GET_MAX_RETRIES      = "3"
+    POWERTOOLS_SERVICE_NAME    = "caged-query"
+    POWERTOOLS_LOG_LEVEL       = "INFO"
+    POWERTOOLS_LOG_EVENT       = "false"
+  }
+
+  iam_policy_json    = data.aws_iam_policy_document.query_metrics.json
+  log_retention_days = var.log_retention_days
+  tags               = local.tags
+}
+
 # Instantiate the orchestration module. Internally it creates the Step
 # Functions state machine, its IAM role and logs, plus EventBridge Scheduler.
 module "download_workflow" {
@@ -428,6 +482,11 @@ output "process_audit_table_name" {
 output "geo_job_metrics_table_name" {
   description = "DynamoDB table containing CAGED geo/job metrics."
   value       = module.geo_job_metrics_table.table_name
+}
+
+output "dataset_catalog_table_name" {
+  description = "DynamoDB table containing CAGED dataset catalog metadata."
+  value       = module.dataset_catalog_table.table_name
 }
 
 output "metric_batches_table_name" {
@@ -498,6 +557,16 @@ output "download_function_name" {
 output "download_alias_arn" {
   description = "Qualified ARN used to invoke the download Lambda."
   value       = module.download_lambda.alias_arn
+}
+
+output "query_function_name" {
+  description = "Query Lambda name used by its deployment workflow."
+  value       = module.query_lambda.function_name
+}
+
+output "query_alias_arn" {
+  description = "Qualified ARN used to invoke the query Lambda."
+  value       = module.query_lambda.alias_arn
 }
 
 output "state_machine_arn" {
