@@ -37,6 +37,11 @@ locals {
       repository    = "caged-download-lambda"
       function_name = "${var.project_name}-dev-download"
     }
+    dev_query = {
+      environment   = "dev"
+      repository    = "caged-query-lambda"
+      function_name = "${var.project_name}-dev-query"
+    }
     prod_check_availability = {
       environment   = "prod"
       repository    = "caged-check-availability-lambda"
@@ -46,6 +51,11 @@ locals {
       environment   = "prod"
       repository    = "caged-download-lambda"
       function_name = "${var.project_name}-prod-download"
+    }
+    prod_query = {
+      environment   = "prod"
+      repository    = "caged-query-lambda"
+      function_name = "${var.project_name}-prod-query"
     }
   }
 
