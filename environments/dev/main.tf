@@ -204,6 +204,16 @@ data "aws_iam_policy_document" "processing_task" {
   }
 
   statement {
+    sid    = "UpdateDatasetCatalog"
+    effect = "Allow"
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:UpdateItem",
+    ]
+    resources = [module.dataset_catalog_table.table_arn]
+  }
+
+  statement {
     sid    = "WriteAndApplyMetricBatches"
     effect = "Allow"
     actions = [
@@ -263,6 +273,7 @@ module "processing_task" {
     REGISTRY_ID                 = var.registry_id
     PROCESS_AUDIT_TABLE_NAME    = module.process_audit_table.table_name
     GEO_JOB_METRICS_TABLE_NAME  = module.geo_job_metrics_table.table_name
+    DATASET_CATALOG_TABLE_NAME  = module.dataset_catalog_table.table_name
     METRIC_BATCHES_TABLE_NAME   = module.metric_batches_table.table_name
     METRIC_REVISIONS_TABLE_NAME = module.metric_revisions_table.table_name
     CBO_LOOKUP_TABLE_NAME       = module.cbo_lookup_table.table_name
