@@ -438,6 +438,25 @@ module "query_lambda" {
   tags               = local.tags
 }
 
+module "query_private_api" {
+  source = "../../modules/private_rest_api"
+
+  name                 = "${local.name_prefix}-query-api"
+  description          = "Private REST API for querying CAGED metrics."
+  stage_name           = var.environment
+  version_path_part    = "v1"
+  resource_path_part   = "metrics"
+  lambda_function_name = module.query_lambda.function_name
+  lambda_alias_name    = var.environment
+  lambda_alias_arn     = module.query_lambda.alias_arn
+  vpc_id               = data.aws_vpc.default.id
+  vpc_cidr_block       = data.aws_vpc.default.cidr_block
+  subnet_ids           = data.aws_subnets.default.ids
+  region               = var.aws_region
+  partition            = data.aws_partition.current.partition
+  tags                 = local.tags
+}
+
 # Instantiate the orchestration module. Internally it creates the Step
 # Functions state machine, its IAM role and logs, plus EventBridge Scheduler.
 module "download_workflow" {
@@ -578,6 +597,26 @@ output "query_function_name" {
 output "query_alias_arn" {
   description = "Qualified ARN used to invoke the query Lambda."
   value       = module.query_lambda.alias_arn
+}
+
+output "query_private_api_id" {
+  description = "ID of the private REST API for querying CAGED metrics."
+  value       = module.query_private_api.rest_api_id
+}
+
+output "query_private_api_invoke_url" {
+  description = "Private REST API invoke URL for querying CAGED metrics."
+  value       = module.query_private_api.invoke_url
+}
+
+output "query_private_api_resource_id" {
+  description = "API Gateway resource ID for the private query API route."
+  value       = module.query_private_api.resource_id
+}
+
+output "query_private_api_vpc_endpoint_id" {
+  description = "VPC endpoint ID allowed to invoke the private query API."
+  value       = module.query_private_api.vpc_endpoint_id
 }
 
 output "state_machine_arn" {
