@@ -63,6 +63,15 @@ locals {
   }
 }
 
+resource "aws_secretsmanager_secret" "notifier_slack_bot_token" {
+  name        = "caged/${var.environment}/notifier/slack-bot-token"
+  description = "Slack bot token used by the CAGED notifier Lambda."
+
+  tags = merge(local.tags, {
+    Application = "caged-notifier"
+  })
+}
+
 # A `module` block calls a reusable group of Terraform files. The name
 # `storage` is local to this environment and lets us reference module outputs
 # using expressions such as `module.storage.bucket_name`.
@@ -597,6 +606,11 @@ output "query_function_name" {
 output "query_alias_arn" {
   description = "Qualified ARN used to invoke the query Lambda."
   value       = module.query_lambda.alias_arn
+}
+
+output "notifier_slack_bot_token_secret_arn" {
+  description = "Secrets Manager secret ARN containing the notifier Slack bot token."
+  value       = aws_secretsmanager_secret.notifier_slack_bot_token.arn
 }
 
 output "query_private_api_id" {
