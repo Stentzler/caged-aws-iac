@@ -42,6 +42,11 @@ locals {
       repository    = "caged-query-lambda"
       function_name = "${var.project_name}-dev-query"
     }
+    dev_notifier = {
+      environment   = "dev"
+      repository    = "caged-notifier-lambda"
+      function_name = "${var.project_name}-dev-notifier"
+    }
     prod_check_availability = {
       environment   = "prod"
       repository    = "caged-check-availability-lambda"
