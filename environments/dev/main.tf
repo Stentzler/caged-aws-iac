@@ -72,6 +72,70 @@ resource "aws_secretsmanager_secret" "notifier_slack_bot_token" {
   })
 }
 
+resource "aws_sns_topic" "notify_slack" {
+  name = "${local.name_prefix}-notify-slack"
+
+  tags = merge(local.tags, {
+    Application = "caged-notifier"
+  })
+}
+
+resource "aws_sqs_queue" "slack_notification_dlq" {
+  name                      = "${local.name_prefix}-slack-notification-dlq"
+  message_retention_seconds = 1209600
+
+  tags = merge(local.tags, {
+    Application = "caged-notifier"
+  })
+}
+
+resource "aws_sqs_queue" "slack_notification" {
+  name                       = "${local.name_prefix}-slack-notification-queue"
+  visibility_timeout_seconds = 120
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.slack_notification_dlq.arn
+    maxReceiveCount     = 3
+  })
+
+  tags = merge(local.tags, {
+    Application = "caged-notifier"
+  })
+}
+
+data "aws_iam_policy_document" "slack_notification_queue" {
+  statement {
+    sid     = "AllowNotifySlackTopic"
+    effect  = "Allow"
+    actions = ["sqs:SendMessage"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["sns.amazonaws.com"]
+    }
+
+    resources = [aws_sqs_queue.slack_notification.arn]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values   = [aws_sns_topic.notify_slack.arn]
+    }
+  }
+}
+
+resource "aws_sqs_queue_policy" "slack_notification" {
+  queue_url = aws_sqs_queue.slack_notification.url
+  policy    = data.aws_iam_policy_document.slack_notification_queue.json
+}
+
+resource "aws_sns_topic_subscription" "notify_slack_to_queue" {
+  topic_arn            = aws_sns_topic.notify_slack.arn
+  protocol             = "sqs"
+  endpoint             = aws_sqs_queue.slack_notification.arn
+  raw_message_delivery = true
+}
+
 # A `module` block calls a reusable group of Terraform files. The name
 # `storage` is local to this environment and lets us reference module outputs
 # using expressions such as `module.storage.bucket_name`.
@@ -461,6 +525,18 @@ data "aws_iam_policy_document" "notifier" {
     actions   = ["ses:SendEmail"]
     resources = ["*"]
   }
+
+  statement {
+    sid    = "ProcessSlackNotificationQueue"
+    effect = "Allow"
+    actions = [
+      "sqs:ChangeMessageVisibility",
+      "sqs:DeleteMessage",
+      "sqs:GetQueueAttributes",
+      "sqs:ReceiveMessage",
+    ]
+    resources = [aws_sqs_queue.slack_notification.arn]
+  }
 }
 
 module "notifier_lambda" {
@@ -486,6 +562,13 @@ module "notifier_lambda" {
   iam_policy_json    = data.aws_iam_policy_document.notifier.json
   log_retention_days = var.log_retention_days
   tags               = local.tags
+}
+
+resource "aws_lambda_event_source_mapping" "slack_notification_queue" {
+  event_source_arn        = aws_sqs_queue.slack_notification.arn
+  function_name           = module.notifier_lambda.alias_arn
+  batch_size              = 10
+  function_response_types = ["ReportBatchItemFailures"]
 }
 
 module "query_private_api" {
@@ -662,6 +745,31 @@ output "notifier_alias_arn" {
 output "notifier_slack_bot_token_secret_arn" {
   description = "Secrets Manager secret ARN containing the notifier Slack bot token."
   value       = aws_secretsmanager_secret.notifier_slack_bot_token.arn
+}
+
+output "notify_slack_topic_arn" {
+  description = "SNS topic ARN for Slack notification events."
+  value       = aws_sns_topic.notify_slack.arn
+}
+
+output "slack_notification_queue_arn" {
+  description = "SQS queue ARN consumed by the notifier Lambda for Slack notifications."
+  value       = aws_sqs_queue.slack_notification.arn
+}
+
+output "slack_notification_queue_url" {
+  description = "SQS queue URL consumed by the notifier Lambda for Slack notifications."
+  value       = aws_sqs_queue.slack_notification.url
+}
+
+output "slack_notification_dlq_arn" {
+  description = "SQS dead-letter queue ARN for failed Slack notifications."
+  value       = aws_sqs_queue.slack_notification_dlq.arn
+}
+
+output "slack_notification_dlq_url" {
+  description = "SQS dead-letter queue URL for failed Slack notifications."
+  value       = aws_sqs_queue.slack_notification_dlq.url
 }
 
 output "query_private_api_id" {
