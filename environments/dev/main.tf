@@ -447,6 +447,47 @@ module "query_lambda" {
   tags               = local.tags
 }
 
+data "aws_iam_policy_document" "notifier" {
+  statement {
+    sid       = "ReadSlackBotToken"
+    effect    = "Allow"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [aws_secretsmanager_secret.notifier_slack_bot_token.arn]
+  }
+
+  statement {
+    sid       = "SendEmail"
+    effect    = "Allow"
+    actions   = ["ses:SendEmail"]
+    resources = ["*"]
+  }
+}
+
+module "notifier_lambda" {
+  source = "../../modules/lambda_function"
+
+  function_name = "${local.name_prefix}-notifier"
+  alias_name    = var.environment
+  description   = "Send CAGED notifications to external channels."
+  memory_size   = 256
+  timeout       = 30
+
+  environment_variables = {
+    ENVIRONMENT                 = var.environment
+    SOURCE_NAME                 = "caged-notifier"
+    SLACK_BOT_TOKEN_SECRET_NAME = aws_secretsmanager_secret.notifier_slack_bot_token.name
+    SES_FROM_ADDRESS            = var.notifier_ses_from_address
+    SECRETS_CACHE_TTL_SECONDS   = "300"
+    POWERTOOLS_SERVICE_NAME     = "caged-notifier"
+    POWERTOOLS_LOG_LEVEL        = "INFO"
+    POWERTOOLS_LOG_EVENT        = "false"
+  }
+
+  iam_policy_json    = data.aws_iam_policy_document.notifier.json
+  log_retention_days = var.log_retention_days
+  tags               = local.tags
+}
+
 module "query_private_api" {
   source = "../../modules/private_rest_api"
 
@@ -606,6 +647,16 @@ output "query_function_name" {
 output "query_alias_arn" {
   description = "Qualified ARN used to invoke the query Lambda."
   value       = module.query_lambda.alias_arn
+}
+
+output "notifier_function_name" {
+  description = "Notifier Lambda name used by its deployment workflow."
+  value       = module.notifier_lambda.function_name
+}
+
+output "notifier_alias_arn" {
+  description = "Qualified ARN used to invoke the notifier Lambda."
+  value       = module.notifier_lambda.alias_arn
 }
 
 output "notifier_slack_bot_token_secret_arn" {

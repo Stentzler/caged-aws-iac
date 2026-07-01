@@ -49,9 +49,9 @@ package/
 *.tfstate.*
 *.tfplan
 tfplan
+**/local.auto.tfvars
 crash.log
 crash.*.log
 
 # Keep dependency lock files versioned
 !**/.terraform.lock.hcl
-

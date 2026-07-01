@@ -118,6 +118,12 @@ variable "schedule_timezone" {
   default     = "America/Sao_Paulo"
 }
 
+variable "notifier_ses_from_address" {
+  description = "SES verified sender address used by the notifier Lambda."
+  type        = string
+  default     = "notifications@example.com"
+}
+
 variable "log_retention_days" {
   description = "CloudWatch Logs retention period."
   type        = number
