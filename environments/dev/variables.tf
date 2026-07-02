@@ -124,6 +124,18 @@ variable "notifier_ses_from_address" {
   default     = "notifications@example.com"
 }
 
+variable "notifier_slack_success_channel_id" {
+  description = "Slack channel ID used for successful workflow notifications."
+  type        = string
+  default     = "C0BEC4KED25"
+}
+
+variable "notifier_slack_error_channel_id" {
+  description = "Slack channel ID used for failed workflow notifications."
+  type        = string
+  default     = "C0BFF2M5A48"
+}
+
 variable "log_retention_days" {
   description = "CloudWatch Logs retention period."
   type        = number

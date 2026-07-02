@@ -13,6 +13,21 @@ variable "download_lambda_arn" {
   type        = string
 }
 
+variable "notify_slack_topic_arn" {
+  description = "SNS topic ARN used to publish Slack notification events."
+  type        = string
+}
+
+variable "notifier_slack_success_channel_id" {
+  description = "Slack channel ID used for successful workflow notifications."
+  type        = string
+}
+
+variable "notifier_slack_error_channel_id" {
+  description = "Slack channel ID used for failed workflow notifications."
+  type        = string
+}
+
 variable "processing_task_cluster_arn" {
   description = "ARN of the ECS cluster that runs the processing task."
   type        = string

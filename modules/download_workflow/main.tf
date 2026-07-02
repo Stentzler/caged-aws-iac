@@ -77,6 +77,12 @@ data "aws_iam_policy_document" "state_machine" {
   }
 
   statement {
+    effect    = "Allow"
+    actions   = ["sns:Publish"]
+    resources = [var.notify_slack_topic_arn]
+  }
+
+  statement {
     effect  = "Allow"
     actions = ["iam:PassRole"]
     resources = [
@@ -138,6 +144,11 @@ resource "aws_sfn_state_machine" "this" {
           MaxAttempts     = 3
           BackoffRate     = 2
         }]
+        Catch = [{
+          ErrorEquals = ["States.ALL"]
+          ResultPath  = "$.error"
+          Next        = "BuildWorkflowFailedNotification"
+        }]
         Next = "HasNewFiles"
       }
       HasNewFiles = {
@@ -145,9 +156,23 @@ resource "aws_sfn_state_machine" "this" {
         Choices = [{
           Variable  = "$.new_files[0]"
           IsPresent = true
-          Next      = "DownloadFiles"
+          Next      = "NotifyNewFilesFound"
         }]
         Default = "NoNewFiles"
+      }
+      NotifyNewFilesFound = {
+        Type     = "Task"
+        Resource = "arn:aws:states:::sns:publish"
+        Parameters = {
+          TopicArn = var.notify_slack_topic_arn
+          Message = jsonencode({
+            action  = "notify-slack"
+            channel = var.notifier_slack_success_channel_id
+            message = "New CAGED files found, starting download."
+          })
+        }
+        ResultPath = null
+        Next       = "DownloadFiles"
       }
       NoNewFiles = {
         Type = "Pass"
@@ -249,6 +274,11 @@ resource "aws_sfn_state_machine" "this" {
 
         # Continue only after all selected files have completed successfully.
         Next = "DownloadsCompleted"
+        Catch = [{
+          ErrorEquals = ["States.ALL"]
+          ResultPath  = "$.error"
+          Next        = "BuildWorkflowFailedNotification"
+        }]
       }
       DownloadsCompleted = {
         Type = "Pass"
@@ -258,6 +288,39 @@ resource "aws_sfn_state_machine" "this" {
           # The `.$` suffix again means evaluate a JSONPath. This copies the
           # collected Map results into the workflow's final `files` property.
           "files.$" = "$.files"
+        }
+        Next = "BuildDownloadsCompletedNotification"
+      }
+      BuildDownloadsCompletedNotification = {
+        Type = "Pass"
+        Parameters = {
+          action  = "notify-slack"
+          channel = var.notifier_slack_success_channel_id
+          "message.$" = join("", [
+            "States.Format(",
+            "'All files downloaded successfully, starting processing task. Files: {}', ",
+            "States.JsonToString($.files)",
+            ")",
+          ])
+        }
+        ResultPath = "$.notification"
+        Next       = "NotifyDownloadsCompleted"
+      }
+      NotifyDownloadsCompleted = {
+        Type     = "Task"
+        Resource = "arn:aws:states:::sns:publish"
+        Parameters = {
+          TopicArn    = var.notify_slack_topic_arn
+          "Message.$" = "States.JsonToString($.notification)"
+        }
+        ResultPath = null
+        Next       = "PrepareProcessingInput"
+      }
+      PrepareProcessingInput = {
+        Type = "Pass"
+        Parameters = {
+          "status.$" = "$.status"
+          "files.$"  = "$.files"
         }
         Next = "RunProcessingTask"
       }
@@ -286,7 +349,57 @@ resource "aws_sfn_state_machine" "this" {
           }
         }
         ResultPath = "$.processing_task"
+        Catch = [{
+          ErrorEquals = ["States.ALL"]
+          ResultPath  = "$.error"
+          Next        = "BuildWorkflowFailedNotification"
+        }]
+        Next = "NotifyProcessingCompleted"
+      }
+      NotifyProcessingCompleted = {
+        Type     = "Task"
+        Resource = "arn:aws:states:::sns:publish"
+        Parameters = {
+          TopicArn = var.notify_slack_topic_arn
+          Message = jsonencode({
+            action  = "notify-slack"
+            channel = var.notifier_slack_success_channel_id
+            message = "CAGED processing task completed successfully."
+          })
+        }
+        ResultPath = null
         End        = true
+      }
+      BuildWorkflowFailedNotification = {
+        Type = "Pass"
+        Parameters = {
+          action  = "notify-slack"
+          channel = var.notifier_slack_error_channel_id
+          "message.$" = join("", [
+            "States.Format(",
+            "'CAGED workflow failed. Error: {}. Cause: {}', ",
+            "$.error.Error, ",
+            "$.error.Cause",
+            ")",
+          ])
+        }
+        ResultPath = "$.notification"
+        Next       = "NotifyWorkflowFailed"
+      }
+      NotifyWorkflowFailed = {
+        Type     = "Task"
+        Resource = "arn:aws:states:::sns:publish"
+        Parameters = {
+          TopicArn    = var.notify_slack_topic_arn
+          "Message.$" = "States.JsonToString($.notification)"
+        }
+        ResultPath = null
+        Next       = "WorkflowFailed"
+      }
+      WorkflowFailed = {
+        Type  = "Fail"
+        Error = "CagedWorkflowFailed"
+        Cause = "CAGED workflow failed. Error details were sent to Slack."
       }
     }
   })

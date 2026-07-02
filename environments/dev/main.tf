@@ -602,6 +602,7 @@ module "download_workflow" {
   # lets it build a least-privilege Step Functions execution policy.
   check_availability_lambda_arn = module.check_availability_lambda.alias_arn
   download_lambda_arn           = module.download_lambda.alias_arn
+  notify_slack_topic_arn        = aws_sns_topic.notify_slack.arn
 
   processing_task_cluster_arn        = module.processing_task.cluster_arn
   processing_task_definition_family  = module.processing_task.task_definition_family
@@ -617,6 +618,9 @@ module "download_workflow" {
   schedule_enabled    = var.schedule_enabled
   schedule_expression = var.schedule_expression
   schedule_timezone   = var.schedule_timezone
+
+  notifier_slack_success_channel_id = var.notifier_slack_success_channel_id
+  notifier_slack_error_channel_id   = var.notifier_slack_error_channel_id
 
   log_retention_days = var.log_retention_days
   tags               = local.tags
